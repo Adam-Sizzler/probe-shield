@@ -24,6 +24,8 @@ const (
 	envRateMaxFailures = "PROBE_SHIELD_RL_MAX_FAILURES"
 	envBrandTitle      = "PROBE_SHIELD_BRAND_TITLE"
 	envBrandLogoURL    = "PROBE_SHIELD_BRAND_LOGO_URL"
+	envPageTitle       = "PROBE_SHIELD_PAGE_TITLE"
+	envPageDescription = "PROBE_SHIELD_PAGE_DESCRIPTION"
 	envHeadersEnabled  = "PROBE_SHIELD_RESPONSE_HEADERS_ENABLED"
 	envHeadersJSON     = "PROBE_SHIELD_RESPONSE_HEADERS_JSON"
 )
@@ -33,6 +35,7 @@ type Config struct {
 	Auth            AuthConfig            `json:"auth"`
 	RateLimit       RateLimitConfig       `json:"rateLimit"`
 	Branding        BrandingConfig        `json:"branding"`
+	PageMeta        PageMetaConfig        `json:"pageMeta"`
 	ResponseHeaders ResponseHeadersConfig `json:"responseHeaders"`
 }
 
@@ -55,6 +58,14 @@ type RateLimitConfig struct {
 	WindowRaw         string        `json:"window"`
 	Window            time.Duration `json:"-"`
 	MaxFailedAttempts int           `json:"maxFailedAttempts"`
+}
+
+// PageMetaConfig controls browser-level HTML metadata. Values are injected into
+// index.html by the backend at runtime, so they can be changed without rebuilding
+// the frontend bundle.
+type PageMetaConfig struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 // ResponseHeadersConfig controls HTTP response headers emitted by the stub.
@@ -101,6 +112,10 @@ func Default() Config {
 		Branding: BrandingConfig{
 			Title:   "",
 			LogoURL: "",
+		},
+		PageMeta: PageMetaConfig{
+			Title:       "shield-probe",
+			Description: "Authentication",
 		},
 		ResponseHeaders: ResponseHeadersConfig{
 			Enabled: true,
@@ -169,6 +184,12 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv(envBrandLogoURL)); v != "" {
 		cfg.Branding.LogoURL = v
 	}
+	if v := strings.TrimSpace(os.Getenv(envPageTitle)); v != "" {
+		cfg.PageMeta.Title = v
+	}
+	if v := strings.TrimSpace(os.Getenv(envPageDescription)); v != "" {
+		cfg.PageMeta.Description = v
+	}
 	if v := strings.TrimSpace(os.Getenv(envHeadersEnabled)); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			cfg.ResponseHeaders.Enabled = b
@@ -225,6 +246,14 @@ func normalize(cfg *Config) error {
 
 	cfg.Branding.Title = strings.TrimSpace(cfg.Branding.Title)
 	cfg.Branding.LogoURL = strings.TrimSpace(cfg.Branding.LogoURL)
+	cfg.PageMeta.Title = strings.TrimSpace(cfg.PageMeta.Title)
+	if cfg.PageMeta.Title == "" {
+		cfg.PageMeta.Title = "shield-probe"
+	}
+	cfg.PageMeta.Description = strings.TrimSpace(cfg.PageMeta.Description)
+	if cfg.PageMeta.Description == "" {
+		cfg.PageMeta.Description = "Authentication"
+	}
 	if cfg.ResponseHeaders.Headers != nil {
 		normalized := make(map[string]string, len(cfg.ResponseHeaders.Headers))
 		for name, value := range cfg.ResponseHeaders.Headers {

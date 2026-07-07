@@ -1,11 +1,5 @@
 import { z } from 'zod'
 
-export const OAUTH2_PROVIDERS = {
-  GITHUB: 'github',
-  GOOGLE: 'google',
-  YANDEX: 'yandex'
-}
-
 export const LoginCommand = {
   url: '/api/auth/login',
   TSQ_url: '/api/auth/login',
@@ -28,16 +22,16 @@ export const GetStatusCommand = {
   ResponseSchema: z.object({
     response: z.object({
       isLoginAllowed: z.boolean(),
-      isRegisterAllowed: z.boolean(),
       authentication: z.nullable(z.object({
-        passkey: z.object({ enabled: z.boolean() }),
-        tgAuth: z.object({ enabled: z.boolean(), botId: z.number().nullable() }),
-        oauth2: z.object({ providers: z.record(z.string(), z.boolean()) }),
         password: z.object({ enabled: z.boolean() })
       })),
       branding: z.object({
         title: z.string().nullable(),
         logoUrl: z.string().nullable()
+      }),
+      pageMeta: z.object({
+        title: z.string(),
+        description: z.string()
       })
     })
   })

@@ -1,32 +1,11 @@
-import { Badge, Box, Center, Divider, Group, Image, Stack, Text, Title } from '@mantine/core'
+import { Badge, Box, Group, Image, Stack, Text, Title } from '@mantine/core'
 import { GetStatusCommand } from '@exodus/backend-contract'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 
-import { TelegramLoginButtonFeature } from '@features/auth/telegram-login-button/telegram-login-button.feature'
-import { OAuth2LoginButtonsFeature } from '@features/auth/oauth2-login-button/oauth2-login-button.feature'
-import { PasskeyLoginButtonFeature } from '@features/auth/passkey-login-button'
-import { useGetAuthStatus } from '@shared/api/hooks/auth/auth.query.hooks'
-import { RegisterFormFeature } from '@features/auth/register-form'
+import { useGetAuthStatus } from '@shared/api/hooks'
 import { LoginFormFeature } from '@features/auth/login-form'
 import { parseColoredTextUtil } from '@shared/utils/misc'
 import { Logo, Page } from '@shared/ui'
-
-const getAuthMethods = (authStatus: GetStatusCommand.Response['response'] | undefined) => {
-    const isPasswordEnabled = authStatus?.authentication?.password?.enabled ?? false
-    const isPasskeyEnabled = authStatus?.authentication?.passkey?.enabled ?? false
-    const isTelegramEnabled = authStatus?.authentication?.tgAuth?.enabled ?? false
-    const isOAuth2Enabled =
-        Object.values(authStatus?.authentication?.oauth2?.providers ?? {}).some(Boolean) ?? false
-
-    return {
-        isOAuth2Enabled,
-        isPasskeyEnabled,
-        isPasswordEnabled,
-        isTelegramEnabled,
-        hasAlternativeMethods: isPasskeyEnabled || isTelegramEnabled || isOAuth2Enabled,
-        hasPrimaryMethods: isPasswordEnabled
-    }
-}
 
 const BrandLogo = ({ logoUrl }: { logoUrl?: null | string }) => {
     if (!logoUrl) {
@@ -68,36 +47,33 @@ const BrandTitle = ({ titleParts }: { titleParts: Array<{ color: string; text: s
     )
 }
 
-const AlternativeAuthMethods = ({
-    authentication,
-    isOAuth2Enabled,
-    isPasskeyEnabled,
-    isPasswordEnabled,
-    isTelegramEnabled
-}: {
-    authentication: GetStatusCommand.Response['response']['authentication']
-    isOAuth2Enabled: boolean
-    isPasskeyEnabled: boolean
-    isPasswordEnabled: boolean
-    isTelegramEnabled: boolean
-}) => (
-    <Center>
-        <Stack gap="md" maw={isPasswordEnabled ? 300 : 150} w="100%">
-            {isPasskeyEnabled && authentication && (
-                <PasskeyLoginButtonFeature authentication={authentication} />
-            )}
-            {isTelegramEnabled && authentication && (
-                <TelegramLoginButtonFeature authentication={authentication} />
-            )}
-            {isOAuth2Enabled && authentication && (
-                <OAuth2LoginButtonsFeature authentication={authentication} />
-            )}
-        </Stack>
-    </Center>
-)
+const applyPageMeta = (pageMeta?: GetStatusCommand.Response['response']['pageMeta']) => {
+    if (!pageMeta) {
+        return
+    }
+
+    if (pageMeta.title) {
+        document.title = pageMeta.title
+    }
+
+    if (pageMeta.description) {
+        const selector = 'meta[name="description"]'
+        let meta = document.querySelector<HTMLMetaElement>(selector)
+        if (!meta) {
+            meta = document.createElement('meta')
+            meta.name = 'description'
+            document.head.appendChild(meta)
+        }
+        meta.content = pageMeta.description
+    }
+}
 
 export const LoginPage = () => {
     const { data: authStatus } = useGetAuthStatus()
+
+    useEffect(() => {
+        applyPageMeta(authStatus?.pageMeta)
+    }, [authStatus?.pageMeta])
 
     const titleParts = useMemo(() => {
         if (authStatus?.branding.title) {
@@ -110,11 +86,10 @@ export const LoginPage = () => {
         ]
     }, [authStatus?.branding.title])
 
-    const isRegister = !authStatus?.isLoginAllowed && authStatus?.isRegisterAllowed
-    const authMethods = getAuthMethods(authStatus)
+    const isPasswordEnabled = authStatus?.authentication?.password?.enabled ?? false
 
     return (
-        <Page title="Login">
+        <Page title="Authentication">
             <Stack align="center" gap="xs">
                 <Group align="center" gap={4} justify="center">
                     <BrandLogo logoUrl={authStatus?.branding.logoUrl} />
@@ -127,38 +102,11 @@ export const LoginPage = () => {
                     </Badge>
                 )}
 
-                {!isRegister && authStatus && authStatus.authentication && (
+                {authStatus && isPasswordEnabled && (
                     <Box maw={800} p={30} w={{ base: 440, sm: 500, md: 500 }}>
                         <Stack gap="lg">
-                            {authMethods.isPasswordEnabled && <LoginFormFeature />}
-
-                            {authMethods.hasPrimaryMethods && authMethods.hasAlternativeMethods && (
-                                <Center>
-                                    <Divider
-                                        label="OR"
-                                        labelPosition="center"
-                                        maw="400px"
-                                        w="100%"
-                                    />
-                                </Center>
-                            )}
-
-                            {authMethods.hasAlternativeMethods && (
-                                <AlternativeAuthMethods
-                                    authentication={authStatus.authentication}
-                                    isOAuth2Enabled={authMethods.isOAuth2Enabled}
-                                    isPasskeyEnabled={authMethods.isPasskeyEnabled}
-                                    isPasswordEnabled={authMethods.isPasswordEnabled}
-                                    isTelegramEnabled={authMethods.isTelegramEnabled}
-                                />
-                            )}
+                            <LoginFormFeature />
                         </Stack>
-                    </Box>
-                )}
-
-                {isRegister && (
-                    <Box maw={800} w={{ base: 440, sm: 500, md: 500 }}>
-                        <RegisterFormFeature />
                     </Box>
                 )}
             </Stack>

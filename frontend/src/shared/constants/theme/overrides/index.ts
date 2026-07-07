@@ -6,7 +6,6 @@ import fieldset from './fieldset'
 import buttons from './buttons'
 import layouts from './layouts'
 import tooltip from './tooltip'
-import charts from './charts'
 import drawer from './drawer'
 import inputs from './inputs'
 import badge from './badge'
@@ -23,7 +22,6 @@ export default {
     ...badge,
     ...breadcrumbs,
     ...buttons,
-    ...charts,
     ...inputs,
     ...loadingOverlay,
     ...menu,

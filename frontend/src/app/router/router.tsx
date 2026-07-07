@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Route, BrowserRouter, Routes, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 
 import { ErrorPageComponent } from '@pages/errors/5xx-error'
 import { LoginPage } from '@pages/auth/login'
@@ -24,6 +25,24 @@ function PublicOnly() {
 function DashboardStub() {
     const { isAuthenticated, isInitialized, setIsAuthenticated } = useAuth()
     const navigate = useNavigate()
+
+    useEffect(() => {
+        if (!isInitialized || !isAuthenticated) {
+            return
+        }
+
+        void fetch('/api/dashboard', {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                Accept: 'application/json'
+            }
+        }).catch(() => {
+            // The request intentionally fails with HTTP 500. The browser Network
+            // panel must show the failing API request, but the UI stays on the
+            // original 500 screen.
+        })
+    }, [isInitialized, isAuthenticated])
 
     if (!isInitialized) {
         return null

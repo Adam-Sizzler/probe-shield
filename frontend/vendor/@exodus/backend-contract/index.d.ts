@@ -1,11 +1,5 @@
 import { z } from 'zod'
 
-export declare const OAUTH2_PROVIDERS: {
-  readonly GITHUB: 'github'
-  readonly GOOGLE: 'google'
-  readonly YANDEX: 'yandex'
-}
-
 export declare const LoginCommand: {
   url: string
   TSQ_url: string
@@ -24,14 +18,11 @@ export declare const GetStatusCommand: {
   ResponseSchema: z.ZodType<{
     response: {
       isLoginAllowed: boolean
-      isRegisterAllowed: boolean
       authentication: null | {
-        passkey: { enabled: boolean }
-        tgAuth: { enabled: boolean; botId: number | null }
-        oauth2: { providers: Record<string, boolean> }
         password: { enabled: boolean }
       }
       branding: { title: string | null; logoUrl: string | null }
+      pageMeta: { title: string; description: string }
     }
   }>
 }

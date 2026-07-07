@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"html"
 	"log/slog"
 	"net/http"
 	"os"
@@ -54,6 +55,8 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.handleMe(w, r)
 	case relative == "api/auth/logout":
 		s.handleLogout(w, r)
+	case relative == "api/dashboard":
+		s.handleDashboardProbe(w, r)
 	case strings.HasPrefix(relative, "api/"):
 		notFound(w)
 	case relative == "dashboard" || strings.HasPrefix(relative, "dashboard/"):
@@ -78,25 +81,18 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"response": map[string]any{
-			"isLoginAllowed":    true,
-			"isRegisterAllowed": false,
+			"isLoginAllowed": true,
 			"branding": map[string]any{
 				"title":   nullableString(s.cfg.Branding.Title),
 				"logoUrl": nullableString(s.cfg.Branding.LogoURL),
 			},
+			"pageMeta": map[string]any{
+				"title":       s.cfg.PageMeta.Title,
+				"description": s.cfg.PageMeta.Description,
+			},
 			"authentication": map[string]any{
 				"password": map[string]any{
 					"enabled": true,
-				},
-				"passkey": map[string]any{
-					"enabled": false,
-				},
-				"tgAuth": map[string]any{
-					"enabled": false,
-					"botId":   nil,
-				},
-				"oauth2": map[string]any{
-					"providers": map[string]bool{},
 				},
 			},
 		},
@@ -178,6 +174,21 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleDashboardProbe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+	if !s.auth.Authenticated(r) {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
+		return
+	}
+	writeJSON(w, http.StatusInternalServerError, map[string]any{
+		"error":   "internal_server_error",
+		"message": "Something bad just happened...",
+	})
+}
+
 func (s *Server) handleAuthenticatedStub(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		methodNotAllowed(w, http.MethodGet)
@@ -227,7 +238,24 @@ func (s *Server) serveIndexWithStatus(w http.ResponseWriter, indexPath string, s
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write(data)
+	_, _ = w.Write(s.renderIndexHTML(data))
+}
+
+func (s *Server) renderIndexHTML(data []byte) []byte {
+	body := string(data)
+	title := html.EscapeString(s.cfg.PageMeta.Title)
+	description := html.EscapeString(s.cfg.PageMeta.Description)
+
+	replacements := map[string]string{
+		"%PROBE_SHIELD_PAGE_TITLE%":                            title,
+		"%PROBE_SHIELD_PAGE_DESCRIPTION%":                      description,
+		`<title>shield-probe</title>`:                          `<title>` + title + `</title>`,
+		`<meta name="description" content="Authentication" />`: `<meta name="description" content="` + description + `" />`,
+	}
+	for from, to := range replacements {
+		body = strings.ReplaceAll(body, from, to)
+	}
+	return []byte(body)
 }
 
 func nullableString(value string) any {
@@ -262,7 +290,7 @@ func defaultResponseHeaders() map[string]string {
 		"Referrer-Policy":              "strict-origin-when-cross-origin",
 		"Strict-Transport-Security":    "max-age=31536000; includeSubDomains",
 		"X-Robots-Tag":                 "noindex, nofollow, noarchive, nosnippet, noimageindex",
-		"Content-Security-Policy":      "default-src 'self' *;script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' *;img-src 'self' data: *;connect-src 'self' *;worker-src 'self' blob: *;frame-src 'self' oauth.telegram.org *;frame-ancestors 'self' *;base-uri 'self';font-src 'self' https: data:;form-action 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
+		"Content-Security-Policy":      "default-src 'self' *;script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' *;img-src 'self' data: *;connect-src 'self' *;worker-src 'self' blob: *;frame-src 'self' *;frame-ancestors 'self' *;base-uri 'self';font-src 'self' https: data:;form-action 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests",
 	}
 }
 

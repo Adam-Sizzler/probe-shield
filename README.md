@@ -2,16 +2,17 @@
 
 Minimal split backend/frontend authentication stub. Runtime/project names are isolated as `probe-shield`, while the auth and 500 screens intentionally keep the original Exodus-style visual shell.
 
-The project intentionally contains no PostgreSQL, Redis, queue, node, metrics, Telegram, subscription, OAuth, passkey, dashboard, or external panel integrations.
+The project intentionally contains no PostgreSQL, Redis, queue, node, metrics, subscription, dashboard, or external panel integrations.
 
 ## Behavior
 
 - The backend serves the frontend from `frontend/dist` at the domain root only. There is no base-path/runtime-path override.
-- Auth-page branding is read from config/env and returned through the original `/api/auth/status` `branding.title` / `branding.logoUrl` contract.
+- Auth-page branding is read from config/env and returned through `/api/auth/status` as `branding.title` / `branding.logoUrl`.
+- Browser `<title>` and `<meta name="description">` are also read from config/env and injected by backend at runtime.
 - Login is checked only against plaintext values from config/env.
 - Failed login attempts are delayed by `PROBE_SHIELD_AUTH_CHECK_DELAY` / `auth.authCheckDelay` and then rate-limited in memory.
 - If login or password is empty, successful authentication is impossible.
-- After successful authentication, `/dashboard` returns a real HTTP `500 Internal Server Error` and renders the original-style 500 page (`Something bad just happened...`) with a return-to-authentication button.
+- After successful authentication, the frontend requests `/api/dashboard`; that request intentionally returns real HTTP `500 Internal Server Error`, so the Network panel contains an API 500. `/dashboard` itself also returns HTTP `500` when loaded directly with a valid session.
 - Without a valid session cookie, `/dashboard` redirects to `/`.
 
 ## Docker Compose
@@ -39,6 +40,8 @@ PROBE_SHIELD_RL_WINDOW=5m
 PROBE_SHIELD_RL_MAX_FAILURES=10
 PROBE_SHIELD_BRAND_TITLE=
 PROBE_SHIELD_BRAND_LOGO_URL=
+PROBE_SHIELD_PAGE_TITLE=shield-probe
+PROBE_SHIELD_PAGE_DESCRIPTION=Authentication
 PROBE_SHIELD_RESPONSE_HEADERS_ENABLED=true
 PROBE_SHIELD_RESPONSE_HEADERS_JSON=
 ```
@@ -105,6 +108,25 @@ For a local static logo inside the container, place the file into `frontend/dist
 PROBE_SHIELD_BRAND_LOGO_URL=/logo.svg
 ```
 
+## Browser title and meta description
+
+In `configs/probe-shield.json`:
+
+```json
+"pageMeta": {
+  "title": "shield-probe",
+  "description": "Authentication"
+}
+```
+
+The same values can be overridden from the shared `.env` file:
+
+```dotenv
+PROBE_SHIELD_PAGE_TITLE=Authentication
+PROBE_SHIELD_PAGE_DESCRIPTION=Dashboard
+```
+
+The backend injects these values into `index.html` at runtime, so changing them does not require rebuilding the frontend bundle.
 
 ## Response headers
 
@@ -122,7 +144,7 @@ PROBE_SHIELD_BRAND_LOGO_URL=/logo.svg
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex",
-    "Content-Security-Policy": "default-src 'self' *;script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' *;img-src 'self' data: *;connect-src 'self' *;worker-src 'self' blob: *;frame-src 'self' oauth.telegram.org *;frame-ancestors 'self' *;base-uri 'self';font-src 'self' https: data:;form-action 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests"
+    "Content-Security-Policy": "default-src 'self' *;script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' *;img-src 'self' data: *;connect-src 'self' *;worker-src 'self' blob: *;frame-src 'self' *;frame-ancestors 'self' *;base-uri 'self';font-src 'self' https: data:;form-action 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests"
   }
 }
 ```
@@ -163,7 +185,7 @@ docker compose up -d --build
 
 ## API compatibility checks
 
-Auth status is wrapped like the original frontend contract expects:
+Auth status contains only the password auth branch plus branding/page metadata:
 
 ```bash
 curl http://127.0.0.1:3000/api/auth/status
@@ -181,6 +203,18 @@ Successful login returns:
 
 ```json
 {"response":{"accessToken":"..."}}
+```
+
+After login, the UI intentionally requests:
+
+```bash
+curl -i -b cookies.txt http://127.0.0.1:3000/api/dashboard
+```
+
+Expected result:
+
+```http
+HTTP/1.1 500 Internal Server Error
 ```
 
 Health check:
