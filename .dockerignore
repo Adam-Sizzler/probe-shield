@@ -1,0 +1,9 @@
+.git
+.github
+**/node_modules
+**/.cache
+**/.vite
+backend/probe-shield
+backend/*.test
+/dist
+*.log

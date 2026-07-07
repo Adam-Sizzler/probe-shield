@@ -1,0 +1,35 @@
+{
+  "server": {
+    "address": "0.0.0.0",
+    "port": 3000,
+    "staticDir": "../frontend/dist"
+  },
+  "auth": {
+    "login": "",
+    "password": "",
+    "sessionTTL": "12h",
+    "authCheckDelay": "5s"
+  },
+  "rateLimit": {
+    "window": "5m",
+    "maxFailedAttempts": 10
+  },
+  "branding": {
+    "title": "",
+    "logoUrl": ""
+  },
+  "responseHeaders": {
+    "enabled": true,
+    "headers": {
+      "X-Content-Type-Options": "nosniff",
+      "X-XSS-Protection": "0",
+      "X-Frame-Options": "SAMEORIGIN",
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+      "Cross-Origin-Resource-Policy": "same-site",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+      "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex",
+      "Content-Security-Policy": "default-src 'self' *;script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' *;img-src 'self' data: *;connect-src 'self' *;worker-src 'self' blob: *;frame-src 'self' oauth.telegram.org *;frame-ancestors 'self' *;base-uri 'self';font-src 'self' https: data:;form-action 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests"
+    }
+  }
+}

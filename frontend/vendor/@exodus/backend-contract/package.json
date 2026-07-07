@@ -1,0 +1,11 @@
+{
+  "name": "@exodus/backend-contract",
+  "version": "0.0.0-probe-shield",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "dependencies": {
+    "zod": "3.25.76"
+  }
+}
