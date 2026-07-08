@@ -1,0 +1,109 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'               # теги, начинающиеся с v (например, v26.6.1)
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:        # ручной запуск
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read        # для checkout
+      packages: write       # для публикации в ghcr.io
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run start:build
+
+      - name: Test backend
+        working-directory: backend
+        run: go test ./...
+
+      - name: Build backend
+        working-directory: backend
+        run: |
+          mkdir -p ../dist
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../dist/probe-shield .
+
+      - name: Build container image
+        run: docker build -t probe-shield:ci .
+
+      # ---- Публикация образа в реестр (только для тегов) ----
+      - name: Log in to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push image
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          IMAGE=ghcr.io/${{ github.repository_owner }}/probe-shield
+          docker tag probe-shield:ci $IMAGE:$VERSION
+          docker tag probe-shield:ci $IMAGE:latest
+          docker push $IMAGE:$VERSION
+          docker push $IMAGE:latest
+
+      # ---- Сохраняем Docker-образ как tar-архив для прикрепления к релизу ----
+      - name: Save docker image as tar
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: docker save probe-shield:ci -o probe-shield.tar
+
+      - name: Upload docker image artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-shield-docker-image
+          path: probe-shield.tar
+
+  # ---- Отдельная job для создания релиза (только для тегов) ----
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # для создания релиза
+
+    steps:
+      - name: Download docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: probe-shield-docker-image
+          path: .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: probe-shield.tar
+          generate_release_notes: true   # автоматически генерирует описание релиза
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
