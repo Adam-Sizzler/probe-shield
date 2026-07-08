@@ -22,7 +22,6 @@ services:
     <<: [*common, *logging, *env]
     image: ghcr.io/adam-sizzler/probe-shield:latest 
     container_name: probe-shield
-    restart: unless-stopped
     ports:
       - "${PROBE_SHIELD_HTTP_PORT:-4000}:${PROBE_SHIELD_HTTP_PORT:-4000}"
 
