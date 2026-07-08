@@ -6,18 +6,18 @@ on:
       - main
       - develop
     tags:
-      - 'v*'               # теги, начинающиеся с v (например, v26.6.1)
+      - 'v*'
   pull_request:
     branches:
       - main
-  workflow_dispatch:        # ручной запуск
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read        # для checkout
-      packages: write       # для публикации в ghcr.io
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
@@ -45,7 +45,7 @@ jobs:
         working-directory: backend
         run: go test ./...
 
-      - name: Build backend
+      - name: Build backend (optional, for local testing)
         working-directory: backend
         run: |
           mkdir -p ../dist
@@ -54,7 +54,6 @@ jobs:
       - name: Build container image
         run: docker build -t probe-shield:ci .
 
-      # ---- Публикация образа в реестр (только для тегов) ----
       - name: Log in to GitHub Container Registry
         if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v3
@@ -67,13 +66,14 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          IMAGE=ghcr.io/${{ github.repository_owner }}/probe-shield
+          # Приводим owner/repo к нижнему регистру (требование Docker)
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE=ghcr.io/$REPO_LOWER
           docker tag probe-shield:ci $IMAGE:$VERSION
           docker tag probe-shield:ci $IMAGE:latest
           docker push $IMAGE:$VERSION
           docker push $IMAGE:latest
 
-      # ---- Сохраняем Docker-образ как tar-архив для прикрепления к релизу ----
       - name: Save docker image as tar
         if: startsWith(github.ref, 'refs/tags/v')
         run: docker save probe-shield:ci -o probe-shield.tar
@@ -85,13 +85,12 @@ jobs:
           name: probe-shield-docker-image
           path: probe-shield.tar
 
-  # ---- Отдельная job для создания релиза (только для тегов) ----
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write        # для создания релиза
+      contents: write
 
     steps:
       - name: Download docker image artifact
@@ -104,6 +103,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: probe-shield.tar
-          generate_release_notes: true   # автоматически генерирует описание релиза
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
