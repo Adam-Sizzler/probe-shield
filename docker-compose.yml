@@ -5,7 +5,7 @@ x-common: &common
       hard: 1048576
   restart: always
   networks:
-    - probe-shield-network
+    - all-net
 
 x-logging: &logging
   logging:
@@ -22,11 +22,12 @@ services:
     <<: [*common, *logging, *env]
     image: ghcr.io/adam-sizzler/probe-shield:latest 
     container_name: probe-shield
-    ports:
-      - "${PROBE_SHIELD_HTTP_PORT:-4000}:${PROBE_SHIELD_HTTP_PORT:-4000}"
+    hostname: probe-shield
+    # ports:
+    #   - "${PROBE_SHIELD_HTTP_PORT:-4000}:${PROBE_SHIELD_HTTP_PORT:-4000}"
 
 networks:
-  exodus-network:
-    name: probe-shield-network
+  all-net:
+    name: all-net
     driver: bridge
     external: false
