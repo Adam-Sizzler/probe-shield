@@ -27,7 +27,7 @@ export const theme = createTheme({
     white: '#ffffff',
     black: '#24292f',
     colors: {
-        'exodus-logo-exo': [
+        'probeshield-logo-probe': [
             '#fcfcf9',
             '#f9f9f3',
             '#f6f6ee',
@@ -39,7 +39,7 @@ export const theme = createTheme({
             '#b3b4a6',
             '#97988c'
         ],
-        'exodus-logo-dus': [
+        'probeshield-logo-shield': [
             '#e8ecee',
             '#d7dde2',
             '#c3ccd3',

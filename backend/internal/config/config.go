@@ -12,22 +12,20 @@ import (
 )
 
 const (
-	envConfigFile      = "PROBE_SHIELD_CONFIG_FILE"
-	envHTTPAddress     = "PROBE_SHIELD_HTTP_ADDRESS"
-	envHTTPPort        = "PROBE_SHIELD_HTTP_PORT"
-	envStaticDir       = "PROBE_SHIELD_STATIC_DIR"
-	envLogin           = "PROBE_SHIELD_LOGIN"
-	envPassword        = "PROBE_SHIELD_PASSWORD"
-	envSessionTTL      = "PROBE_SHIELD_SESSION_TTL"
-	envAuthCheckDelay  = "PROBE_SHIELD_AUTH_CHECK_DELAY"
-	envRateWindow      = "PROBE_SHIELD_RL_WINDOW"
-	envRateMaxFailures = "PROBE_SHIELD_RL_MAX_FAILURES"
-	envBrandTitle      = "PROBE_SHIELD_BRAND_TITLE"
-	envBrandLogoURL    = "PROBE_SHIELD_BRAND_LOGO_URL"
-	envPageTitle       = "PROBE_SHIELD_PAGE_TITLE"
-	envPageDescription = "PROBE_SHIELD_PAGE_DESCRIPTION"
-	envHeadersEnabled  = "PROBE_SHIELD_RESPONSE_HEADERS_ENABLED"
-	envHeadersJSON     = "PROBE_SHIELD_RESPONSE_HEADERS_JSON"
+	envHTTPAddress      = "PROBE_SHIELD_HTTP_ADDRESS"
+	envHTTPPort         = "PROBE_SHIELD_HTTP_PORT"
+	envLogin            = "PROBE_SHIELD_LOGIN"
+	envPassword         = "PROBE_SHIELD_PASSWORD"
+	envRateWindow       = "PROBE_SHIELD_RL_WINDOW"
+	envRateMaxFailures  = "PROBE_SHIELD_RL_MAX_FAILURES"
+	envBrandTitle       = "PROBE_SHIELD_BRAND_TITLE"
+	envBrandDescription = "PROBE_SHIELD_BRAND_DESCRIPTION"
+	envBrandLogoURL     = "PROBE_SHIELD_BRAND_LOGO_URL"
+	envHeadersEnabled   = "PROBE_SHIELD_RESPONSE_HEADERS_ENABLED"
+	envHeadersJSON      = "PROBE_SHIELD_RESPONSE_HEADERS_JSON"
+
+	DefaultSessionTTL     = time.Hour
+	DefaultAuthCheckDelay = 5 * time.Second
 )
 
 type Config struct {
@@ -35,23 +33,28 @@ type Config struct {
 	Auth            AuthConfig            `json:"auth"`
 	RateLimit       RateLimitConfig       `json:"rateLimit"`
 	Branding        BrandingConfig        `json:"branding"`
-	PageMeta        PageMetaConfig        `json:"pageMeta"`
 	ResponseHeaders ResponseHeadersConfig `json:"responseHeaders"`
+	Telegram        TelegramConfig        `json:"telegram"`
+}
+
+type TelegramConfig struct {
+	Enabled      bool   `json:"enabled"`
+	BotToken     string `json:"botToken"`
+	BotProxy     string `json:"botProxy"`
+	NotifyTarget string `json:"notifyTarget"`
 }
 
 type ServerConfig struct {
 	Address   string `json:"address"`
 	Port      int    `json:"port"`
-	StaticDir string `json:"staticDir"`
+	StaticDir string `json:"-"`
 }
 
 type AuthConfig struct {
-	Login             string        `json:"login"`
-	Password          string        `json:"password"`
-	SessionTTL        time.Duration `json:"-"`
-	SessionTTLRaw     string        `json:"sessionTTL"`
-	AuthCheckDelay    time.Duration `json:"-"`
-	AuthCheckDelayRaw string        `json:"authCheckDelay"`
+	Login          string        `json:"login"`
+	Password       string        `json:"password"`
+	SessionTTL     time.Duration `json:"-"`
+	AuthCheckDelay time.Duration `json:"-"`
 }
 
 type RateLimitConfig struct {
@@ -60,18 +63,10 @@ type RateLimitConfig struct {
 	MaxFailedAttempts int           `json:"maxFailedAttempts"`
 }
 
-// PageMetaConfig controls browser-level HTML metadata. Values are injected into
-// index.html by the backend at runtime, so they can be changed without rebuilding
-// the frontend bundle.
-type PageMetaConfig struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-}
-
 // ResponseHeadersConfig controls HTTP response headers emitted by the stub.
 // If enabled=true and headers contains at least one item, only these configured
-// headers are emitted. If enabled=true and headers is empty, built-in Exodus-like
-// baseline security headers are emitted. If enabled=false, no security headers are added.
+// headers are emitted. If enabled=true and headers is empty, built-in baseline
+// security headers are emitted. If enabled=false, no security headers are added.
 type ResponseHeadersConfig struct {
 	Enabled bool              `json:"enabled"`
 	Headers map[string]string `json:"headers"`
@@ -80,9 +75,13 @@ type ResponseHeadersConfig struct {
 // BrandingConfig mirrors the original frontend status contract, but the values
 // are loaded from configuration instead of database settings.
 type BrandingConfig struct {
-	// Title supports the original colored text format, for example:
+	// Title is the single source for both the visible auth-page name and the
+	// browser document title. It supports the original colored text format:
 	// {8195a3}Exo{eceddb}dus
 	Title string `json:"title"`
+
+	// Description is used for the browser meta description.
+	Description string `json:"description"`
 
 	// LogoURL may be an absolute URL or a root-relative/static URL, for example:
 	// https://example.com/logo.svg or /logo.svg
@@ -93,16 +92,14 @@ func Default() Config {
 	return Config{
 		Server: ServerConfig{
 			Address:   "0.0.0.0",
-			Port:      3000,
-			StaticDir: "../frontend/dist",
+			Port:      4000,
+			StaticDir: "",
 		},
 		Auth: AuthConfig{
-			Login:             "",
-			Password:          "",
-			SessionTTLRaw:     "12h",
-			SessionTTL:        12 * time.Hour,
-			AuthCheckDelayRaw: "5s",
-			AuthCheckDelay:    5 * time.Second,
+			Login:          "",
+			Password:       "",
+			SessionTTL:     DefaultSessionTTL,
+			AuthCheckDelay: DefaultAuthCheckDelay,
 		},
 		RateLimit: RateLimitConfig{
 			WindowRaw:         "5m",
@@ -110,12 +107,9 @@ func Default() Config {
 			MaxFailedAttempts: 10,
 		},
 		Branding: BrandingConfig{
-			Title:   "",
-			LogoURL: "",
-		},
-		PageMeta: PageMetaConfig{
-			Title:       "shield-probe",
+			Title:       "",
 			Description: "Authentication",
+			LogoURL:     "",
 		},
 		ResponseHeaders: ResponseHeadersConfig{
 			Enabled: true,
@@ -126,17 +120,18 @@ func Default() Config {
 
 func Load() (Config, error) {
 	cfg := Default()
-	configPath := strings.TrimSpace(os.Getenv(envConfigFile))
-	if configPath == "" {
-		configPath = filepath.Join("configs", "probe-shield.json")
+	configPath, found, err := findConfigFile()
+	if err != nil {
+		return cfg, err
 	}
-
-	if data, err := os.ReadFile(configPath); err == nil {
+	if found {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return cfg, fmt.Errorf("read %s: %w", configPath, err)
+		}
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			return cfg, fmt.Errorf("parse %s: %w", configPath, err)
 		}
-	} else if !os.IsNotExist(err) || os.Getenv(envConfigFile) != "" {
-		return cfg, fmt.Errorf("read %s: %w", configPath, err)
 	}
 
 	applyEnvOverrides(&cfg)
@@ -144,6 +139,22 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+func findConfigFile() (path string, found bool, err error) {
+	candidates := []string{
+		filepath.Join("configs", "config.json"),
+		filepath.Join("..", "configs", "config.json"),
+		filepath.Join("/app", "configs", "config.json"),
+	}
+	for _, candidate := range candidates {
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			return candidate, true, nil
+		} else if !os.IsNotExist(statErr) {
+			return "", false, fmt.Errorf("stat %s: %w", candidate, statErr)
+		}
+	}
+	return "", false, nil
 }
 
 func applyEnvOverrides(cfg *Config) {
@@ -155,20 +166,11 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.Server.Port = p
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv(envStaticDir)); v != "" {
-		cfg.Server.StaticDir = v
-	}
 	if v := os.Getenv(envLogin); v != "" {
 		cfg.Auth.Login = v
 	}
 	if v := os.Getenv(envPassword); v != "" {
 		cfg.Auth.Password = v
-	}
-	if v := strings.TrimSpace(os.Getenv(envSessionTTL)); v != "" {
-		cfg.Auth.SessionTTLRaw = v
-	}
-	if v := strings.TrimSpace(os.Getenv(envAuthCheckDelay)); v != "" {
-		cfg.Auth.AuthCheckDelayRaw = v
 	}
 	if v := strings.TrimSpace(os.Getenv(envRateWindow)); v != "" {
 		cfg.RateLimit.WindowRaw = v
@@ -181,14 +183,11 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv(envBrandTitle)); v != "" {
 		cfg.Branding.Title = v
 	}
+	if v := strings.TrimSpace(os.Getenv(envBrandDescription)); v != "" {
+		cfg.Branding.Description = v
+	}
 	if v := strings.TrimSpace(os.Getenv(envBrandLogoURL)); v != "" {
 		cfg.Branding.LogoURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv(envPageTitle)); v != "" {
-		cfg.PageMeta.Title = v
-	}
-	if v := strings.TrimSpace(os.Getenv(envPageDescription)); v != "" {
-		cfg.PageMeta.Description = v
 	}
 	if v := strings.TrimSpace(os.Getenv(envHeadersEnabled)); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
@@ -201,6 +200,20 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.ResponseHeaders.Headers = headers
 		}
 	}
+	if v := strings.TrimSpace(os.Getenv("IS_TELEGRAM_NOTIFICATIONS_ENABLED")); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.Telegram.Enabled = b
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")); v != "" {
+		cfg.Telegram.BotToken = v
+	}
+	if v := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_PROXY")); v != "" {
+		cfg.Telegram.BotProxy = v
+	}
+	if v := strings.TrimSpace(os.Getenv("TELEGRAM_NOTIFY_SERVICE")); v != "" {
+		cfg.Telegram.NotifyTarget = v
+	}
 }
 
 func normalize(cfg *Config) error {
@@ -210,27 +223,10 @@ func normalize(cfg *Config) error {
 	if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
 		return fmt.Errorf("server.port must be in 1..65535")
 	}
-	if strings.TrimSpace(cfg.Server.StaticDir) == "" {
-		cfg.Server.StaticDir = "../frontend/dist"
-	}
+	cfg.Server.StaticDir = detectStaticDir()
 
-	if cfg.Auth.SessionTTLRaw == "" {
-		cfg.Auth.SessionTTLRaw = "12h"
-	}
-	ttl, err := time.ParseDuration(cfg.Auth.SessionTTLRaw)
-	if err != nil || ttl <= 0 {
-		return fmt.Errorf("auth.sessionTTL must be a positive Go duration, for example 12h")
-	}
-	cfg.Auth.SessionTTL = ttl
-
-	if cfg.Auth.AuthCheckDelayRaw == "" {
-		cfg.Auth.AuthCheckDelayRaw = "5s"
-	}
-	authDelay, err := time.ParseDuration(cfg.Auth.AuthCheckDelayRaw)
-	if err != nil || authDelay < 0 {
-		return fmt.Errorf("auth.authCheckDelay must be a non-negative Go duration, for example 5s")
-	}
-	cfg.Auth.AuthCheckDelay = authDelay
+	cfg.Auth.SessionTTL = DefaultSessionTTL
+	cfg.Auth.AuthCheckDelay = DefaultAuthCheckDelay
 
 	if cfg.RateLimit.WindowRaw == "" {
 		cfg.RateLimit.WindowRaw = "5m"
@@ -245,15 +241,9 @@ func normalize(cfg *Config) error {
 	}
 
 	cfg.Branding.Title = strings.TrimSpace(cfg.Branding.Title)
+	cfg.Branding.Description = strings.TrimSpace(cfg.Branding.Description)
+	cfg.Branding.Description = strings.TrimSpace(cfg.Branding.Description)
 	cfg.Branding.LogoURL = strings.TrimSpace(cfg.Branding.LogoURL)
-	cfg.PageMeta.Title = strings.TrimSpace(cfg.PageMeta.Title)
-	if cfg.PageMeta.Title == "" {
-		cfg.PageMeta.Title = "shield-probe"
-	}
-	cfg.PageMeta.Description = strings.TrimSpace(cfg.PageMeta.Description)
-	if cfg.PageMeta.Description == "" {
-		cfg.PageMeta.Description = "Authentication"
-	}
 	if cfg.ResponseHeaders.Headers != nil {
 		normalized := make(map[string]string, len(cfg.ResponseHeaders.Headers))
 		for name, value := range cfg.ResponseHeaders.Headers {
@@ -266,6 +256,20 @@ func normalize(cfg *Config) error {
 		cfg.ResponseHeaders.Headers = normalized
 	}
 	return nil
+}
+
+func detectStaticDir() string {
+	candidates := []string{
+		filepath.Join("/app", "frontend", "dist"),
+		filepath.Join("..", "frontend", "dist"),
+		filepath.Join("frontend", "dist"),
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(filepath.Join(candidate, "index.html")); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return filepath.Join("..", "frontend", "dist")
 }
 
 func (s ServerConfig) ListenAddress() string {

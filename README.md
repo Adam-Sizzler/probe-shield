@@ -1,228 +1,148 @@
-# Probe Shield
+# ProbeShield
 
-Minimal split backend/frontend authentication stub. Runtime/project names are isolated as `probe-shield`, while the auth and 500 screens intentionally keep the original Exodus-style visual shell.
-
-The project intentionally contains no PostgreSQL, Redis, queue, node, metrics, subscription, dashboard, or external panel integrations.
+Minimal split frontend/backend auth stub.
 
 ## Behavior
 
-- The backend serves the frontend from `frontend/dist` at the domain root only. There is no base-path/runtime-path override.
-- Auth-page branding is read from config/env and returned through `/api/auth/status` as `branding.title` / `branding.logoUrl`.
-- Browser `<title>` and `<meta name="description">` are also read from config/env and injected by backend at runtime.
-- Login is checked only against plaintext values from config/env.
-- Failed login attempts are delayed by `PROBE_SHIELD_AUTH_CHECK_DELAY` / `auth.authCheckDelay` and then rate-limited in memory.
-- If login or password is empty, successful authentication is impossible.
-- After successful authentication, the frontend requests `/api/dashboard`; that request intentionally returns real HTTP `500 Internal Server Error`, so the Network panel contains an API 500. `/dashboard` itself also returns HTTP `500` when loaded directly with a valid session.
-- Without a valid session cookie, `/dashboard` redirects to `/`.
+- Serves only the authentication frontend and a fake post-login failure page.
+- No PostgreSQL, Redis, Prisma, queues, nodes, metrics, OAuth, Telegram, passkey, or registration flow.
+- If `auth.login` or `auth.password` is empty, successful authentication is impossible.
+- Failed authentication is delayed by a hardcoded `5s` before returning `403`.
+- Session TTL is hardcoded to `1h`.
+- After successful authentication the frontend calls `GET /api/dashboard`, which returns real `500`.
+- `GET /dashboard` with a valid cookie also returns real `500` and renders the original-style 500 page.
 
-## Docker Compose
+## Configuration
 
-All runtime settings are isolated under the `PROBE_SHIELD_*` namespace and can live in one `.env` file.
+The config file is fixed as:
 
-```bash
-cp .env.example .env
-nano .env
-docker compose up -d --build
+```text
+configs/config.json
 ```
 
-Default `.env`:
+In Docker it is copied to:
 
-```dotenv
-PROBE_SHIELD_CONFIG_FILE=/app/configs/probe-shield.json
-PROBE_SHIELD_HTTP_ADDRESS=0.0.0.0
-PROBE_SHIELD_HTTP_PORT=3000
-PROBE_SHIELD_STATIC_DIR=/app/frontend/dist
-PROBE_SHIELD_LOGIN=
-PROBE_SHIELD_PASSWORD=
-PROBE_SHIELD_SESSION_TTL=12h
-PROBE_SHIELD_AUTH_CHECK_DELAY=5s
-PROBE_SHIELD_RL_WINDOW=5m
-PROBE_SHIELD_RL_MAX_FAILURES=10
-PROBE_SHIELD_BRAND_TITLE=
-PROBE_SHIELD_BRAND_LOGO_URL=
-PROBE_SHIELD_PAGE_TITLE=shield-probe
-PROBE_SHIELD_PAGE_DESCRIPTION=Authentication
-PROBE_SHIELD_RESPONSE_HEADERS_ENABLED=true
-PROBE_SHIELD_RESPONSE_HEADERS_JSON=
+```text
+/app/configs/config.json
 ```
 
-Set credentials like this:
+There is no `PROBE_SHIELD_CONFIG_FILE` and no `PROBE_SHIELD_STATIC_DIR`. Static files are resolved internally from the fixed project/container layout.
 
-```dotenv
-PROBE_SHIELD_LOGIN=admin
-PROBE_SHIELD_PASSWORD=change-me
-```
-
-Leave either value empty to make successful authentication impossible.
-
-## Branding
-
-Branding is intentionally implemented through the same frontend contract as the original auth page, but values come from config/env instead of the database.
-
-In `configs/probe-shield.json`:
+Example:
 
 ```json
-"branding": {
-  "title": "",
-  "logoUrl": ""
-}
-```
-
-Empty values keep the original Exodus logo and title. To replace the visible name:
-
-```json
-"branding": {
-  "title": "Custom Panel",
-  "logoUrl": ""
-}
-```
-
-The title supports the original colored text syntax:
-
-```json
-"branding": {
-  "title": "{8195a3}Custom{eceddb}Panel",
-  "logoUrl": ""
-}
-```
-
-To replace the logo, set `logoUrl` to an absolute URL or a root-relative static file URL:
-
-```json
-"branding": {
-  "title": "{8195a3}Custom{eceddb}Panel",
-  "logoUrl": "https://example.com/logo.svg"
-}
-```
-
-The same can be overridden from the shared `.env` file:
-
-```dotenv
-PROBE_SHIELD_BRAND_TITLE={8195a3}Custom{eceddb}Panel
-PROBE_SHIELD_BRAND_LOGO_URL=https://example.com/logo.svg
-```
-
-For a local static logo inside the container, place the file into `frontend/dist` before building the Docker image, for example `frontend/dist/logo.svg`, and set:
-
-```dotenv
-PROBE_SHIELD_BRAND_LOGO_URL=/logo.svg
-```
-
-## Browser title and meta description
-
-In `configs/probe-shield.json`:
-
-```json
-"pageMeta": {
-  "title": "shield-probe",
-  "description": "Authentication"
-}
-```
-
-The same values can be overridden from the shared `.env` file:
-
-```dotenv
-PROBE_SHIELD_PAGE_TITLE=Authentication
-PROBE_SHIELD_PAGE_DESCRIPTION=Dashboard
-```
-
-The backend injects these values into `index.html` at runtime, so changing them does not require rebuilding the frontend bundle.
-
-## Response headers
-
-`configs/probe-shield.json` contains a `responseHeaders` block. When `enabled` is `true` and `headers` contains at least one item, the backend emits exactly those configured headers and does not append built-in defaults. When `enabled` is `true` and `headers` is empty or omitted, the backend emits the built-in Exodus-like baseline headers.
-
-```json
-"responseHeaders": {
-  "enabled": true,
-  "headers": {
-    "X-Content-Type-Options": "nosniff",
-    "X-XSS-Protection": "0",
-    "X-Frame-Options": "SAMEORIGIN",
-    "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
-    "Cross-Origin-Resource-Policy": "same-site",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet, noimageindex",
-    "Content-Security-Policy": "default-src 'self' *;script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' *;img-src 'self' data: *;connect-src 'self' *;worker-src 'self' blob: *;frame-src 'self' *;frame-ancestors 'self' *;base-uri 'self';font-src 'self' https: data:;form-action 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests"
+{
+  "server": {
+    "address": "0.0.0.0",
+    "port": 4000
+  },
+  "auth": {
+    "login": "admin",
+    "password": "admin"
+  },
+  "rateLimit": {
+    "window": "5m",
+    "maxFailedAttempts": 10
+  },
+  "branding": {
+    "title": "{8195a3}Probe{eceddb}Shield",
+    "description": "Authentication",
+    "logoUrl": ""
+  },
+  "responseHeaders": {
+    "enabled": true,
+    "headers": {}
   }
 }
 ```
 
-From `.env`, full override is available through JSON:
+`branding.title` is the single source for both the visible auth-page name and browser `<title>`. Color tags like `{8195a3}` are stripped only for the browser title.
 
-```dotenv
+`branding.description` is used as `<meta name="description">`.
+
+`branding.logoUrl` may be an external URL or a root-relative static URL such as `/logo.svg`.
+
+## Environment overrides
+
+Only these variables are supported:
+
+```env
+PROBE_SHIELD_HTTP_ADDRESS=0.0.0.0
+PROBE_SHIELD_HTTP_PORT=4000
+
+PROBE_SHIELD_LOGIN=
+PROBE_SHIELD_PASSWORD=
+
+PROBE_SHIELD_RL_WINDOW=5m
+PROBE_SHIELD_RL_MAX_FAILURES=10
+
+PROBE_SHIELD_BRAND_TITLE={8195a3}Probe{eceddb}Shield
+PROBE_SHIELD_BRAND_DESCRIPTION=Authentication
+PROBE_SHIELD_BRAND_LOGO_URL=
+
 PROBE_SHIELD_RESPONSE_HEADERS_ENABLED=true
-PROBE_SHIELD_RESPONSE_HEADERS_JSON={"X-Content-Type-Options":"nosniff"}
+PROBE_SHIELD_RESPONSE_HEADERS_JSON=
+
+IS_TELEGRAM_NOTIFICATIONS_ENABLED=true
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_PROXY=
+TELEGRAM_NOTIFY_SERVICE=
 ```
 
-With that example, only `X-Content-Type-Options` is emitted from the configurable response-header layer.
+Hardcoded and intentionally not configurable:
 
-## Local build
-
-```bash
-cd frontend
-npm ci --no-audit --no-fund
-npm run start:build
-
-cd ../backend
-PROBE_SHIELD_CONFIG_FILE=../configs/probe-shield.json \
-PROBE_SHIELD_STATIC_DIR=../frontend/dist \
-go run .
+```text
+session TTL: 1h
+auth check delay: 5s
+static dir: /app/frontend/dist in Docker, ../frontend/dist for local backend run
+config path: configs/config.json or /app/configs/config.json
 ```
 
-## Docker build note
+## Response headers
 
-The container build is intentionally Go-only. It expects `frontend/dist` to already exist. The archive already contains this directory; after editing frontend sources manually, rebuild it first:
+If `responseHeaders.enabled=false`, the backend adds no configurable security headers.
+
+If `responseHeaders.enabled=true` and `responseHeaders.headers` is empty, the backend adds its built-in baseline headers.
+
+If `responseHeaders.enabled=true` and `responseHeaders.headers` contains at least one header, only the configured headers are added; built-in headers are not merged.
+
+## Docker
 
 ```bash
-cd frontend
-npm ci --no-audit --no-fund
-npm run start:build
-cd ..
 docker compose up -d --build
 ```
 
-## API compatibility checks
+## Local run
 
-Auth status contains only the password auth branch plus branding/page metadata:
-
-```bash
-curl http://127.0.0.1:3000/api/auth/status
-```
-
-A failed password attempt waits for `PROBE_SHIELD_AUTH_CHECK_DELAY` and returns `403` with the original-style error message for frontend notifications:
+Build frontend first:
 
 ```bash
-curl -i -X POST http://127.0.0.1:3000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  --data '{"username":"admin","password":"wrong"}'
+cd frontend
+npm ci --no-audit --no-fund
+npm run start:build
 ```
 
-Successful login returns:
-
-```json
-{"response":{"accessToken":"..."}}
-```
-
-After login, the UI intentionally requests:
+Run backend:
 
 ```bash
-curl -i -b cookies.txt http://127.0.0.1:3000/api/dashboard
+cd ../backend
+go run .
 ```
 
-Expected result:
-
-```http
-HTTP/1.1 500 Internal Server Error
-```
-
-Health check:
+## API checks
 
 ```bash
-curl http://127.0.0.1:3000/api/health
+curl -i http://127.0.0.1:4000/api/auth/status
+curl -i http://127.0.0.1:4000/api/auth/me
 ```
 
-## GitHub Actions
+Wrong password returns `403` after about 5 seconds.
 
-The workflow at `.github/workflows/build.yml` runs frontend dependency install, typecheck/build, backend test/build, and container build. The Dockerfile intentionally does not run `npm install`; it copies `frontend/dist` into the final image. It does not inject application versions, create releases, or push images.
+Successful login returns `200` and sets `probe_shield_session` cookie. Then:
+
+```bash
+curl -i -b cookies.txt http://127.0.0.1:4000/api/dashboard
+curl -i -b cookies.txt http://127.0.0.1:4000/dashboard
+```
+
+Both return `500` when authenticated.

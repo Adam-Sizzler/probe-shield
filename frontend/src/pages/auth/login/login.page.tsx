@@ -47,44 +47,44 @@ const BrandTitle = ({ titleParts }: { titleParts: Array<{ color: string; text: s
     )
 }
 
-const applyPageMeta = (pageMeta?: GetStatusCommand.Response['response']['pageMeta']) => {
-    if (!pageMeta) {
+const stripBrandColorTags = (value: string) => value.replace(/\{[0-9a-fA-F]{3,8}\}/g, '').trim()
+
+const applyBrandingMeta = (branding?: GetStatusCommand.Response['response']['branding']) => {
+    if (!branding) {
         return
     }
 
-    if (pageMeta.title) {
-        document.title = pageMeta.title
-    }
+    const title = stripBrandColorTags(branding.title) || 'ProbeShield'
+    document.title = title
 
-    if (pageMeta.description) {
-        const selector = 'meta[name="description"]'
-        let meta = document.querySelector<HTMLMetaElement>(selector)
-        if (!meta) {
-            meta = document.createElement('meta')
-            meta.name = 'description'
-            document.head.appendChild(meta)
-        }
-        meta.content = pageMeta.description
+    const description = branding.description || 'Authentication'
+    const selector = 'meta[name="description"]'
+    let meta = document.querySelector<HTMLMetaElement>(selector)
+    if (!meta) {
+        meta = document.createElement('meta')
+        meta.name = 'description'
+        document.head.appendChild(meta)
     }
+    meta.content = description
 }
 
 export const LoginPage = () => {
     const { data: authStatus } = useGetAuthStatus()
 
     useEffect(() => {
-        applyPageMeta(authStatus?.pageMeta)
-    }, [authStatus?.pageMeta])
+        applyBrandingMeta(authStatus?.branding)
+    }, [authStatus?.branding])
 
     const titleParts = useMemo(() => {
-        if (authStatus?.branding.title) {
+        if (authStatus?.branding?.title) {
             return parseColoredTextUtil(authStatus.branding.title)
         }
 
         return [
-            { text: 'Exo', color: 'exodus-logo-exo.6' },
-            { text: 'dus', color: 'exodus-logo-dus.6' }
+            { text: 'Probe', color: 'probeshield-logo-probe.6' },
+            { text: 'Shield', color: 'probeshield-logo-shield.6' }
         ]
-    }, [authStatus?.branding.title])
+    }, [authStatus?.branding?.title])
 
     const isPasswordEnabled = authStatus?.authentication?.password?.enabled ?? false
 

@@ -21,8 +21,7 @@ export declare const GetStatusCommand: {
       authentication: null | {
         password: { enabled: boolean }
       }
-      branding: { title: string | null; logoUrl: string | null }
-      pageMeta: { title: string; description: string }
+      branding: { title: string; description: string; logoUrl: string | null }
     }
   }>
 }

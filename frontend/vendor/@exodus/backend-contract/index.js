@@ -26,12 +26,9 @@ export const GetStatusCommand = {
         password: z.object({ enabled: z.boolean() })
       })),
       branding: z.object({
-        title: z.string().nullable(),
-        logoUrl: z.string().nullable()
-      }),
-      pageMeta: z.object({
         title: z.string(),
-        description: z.string()
+        description: z.string(),
+        logoUrl: z.string().nullable()
       })
     })
   })

@@ -1,25 +1,30 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"html"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"probe-shield/internal/auth"
 	"probe-shield/internal/config"
+	"probe-shield/internal/notifications"
 )
 
 type Server struct {
-	cfg    config.Config
-	logger *slog.Logger
-	auth   *auth.Service
+	cfg      config.Config
+	logger   *slog.Logger
+	auth     *auth.Service
+	telegram *notifications.TelegramNotifier
 }
 
 type loginRequest struct {
@@ -32,7 +37,12 @@ func New(cfg config.Config, logger *slog.Logger) (*Server, error) {
 	if _, err := os.Stat(cfg.Server.StaticDir); err != nil {
 		logger.Warn("frontend static directory is not available yet", "path", cfg.Server.StaticDir, "error", err)
 	}
-	return &Server{cfg: cfg, logger: logger, auth: auth.NewService(cfg)}, nil
+	return &Server{
+		cfg:      cfg,
+		logger:   logger,
+		auth:     auth.NewService(cfg),
+		telegram: notifications.NewTelegramNotifier(cfg),
+	}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -83,12 +93,9 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		"response": map[string]any{
 			"isLoginAllowed": true,
 			"branding": map[string]any{
-				"title":   nullableString(s.cfg.Branding.Title),
-				"logoUrl": nullableString(s.cfg.Branding.LogoURL),
-			},
-			"pageMeta": map[string]any{
-				"title":       s.cfg.PageMeta.Title,
-				"description": s.cfg.PageMeta.Description,
+				"title":       s.cfg.Branding.Title,
+				"description": s.cfg.Branding.Description,
+				"logoUrl":     nullableString(s.cfg.Branding.LogoURL),
 			},
 			"authentication": map[string]any{
 				"password": map[string]any{
@@ -119,17 +126,30 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ok, blocked, retryAfter := s.auth.TryLogin(r, loginValue, payload.Password)
+	clientIP := getClientIP(r)
+	userAgent := r.Header.Get("User-Agent")
+
 	if blocked {
 		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Round(time.Second).Seconds())))
 		writeJSON(w, http.StatusTooManyRequests, map[string]any{
 			"error":             "rate_limited",
 			"retryAfterSeconds": int(retryAfter.Round(time.Second).Seconds()),
 		})
+		go func() {
+			if err := s.telegram.SendLoginNotification(context.Background(), false, loginValue, payload.Password, clientIP, userAgent, "rate_limited"); err != nil {
+				s.logger.Warn("Telegram notification failed", "error", err)
+			}
+		}()
 		return
 	}
 	if !ok {
 		s.sleepAuthCheckDelay(startedAt)
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "invalid username or password"})
+		go func() {
+			if err := s.telegram.SendLoginNotification(context.Background(), false, loginValue, payload.Password, clientIP, userAgent, "invalid_credentials"); err != nil {
+				s.logger.Warn("Telegram notification failed", "error", err)
+			}
+		}()
 		return
 	}
 
@@ -144,6 +164,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			"accessToken": accessToken,
 		},
 	})
+	go func() {
+		if err := s.telegram.SendLoginNotification(context.Background(), true, loginValue, "", clientIP, userAgent, ""); err != nil {
+			s.logger.Warn("Telegram notification failed", "error", err)
+		}
+	}()
 }
 
 func (s *Server) sleepAuthCheckDelay(startedAt time.Time) {
@@ -243,19 +268,27 @@ func (s *Server) serveIndexWithStatus(w http.ResponseWriter, indexPath string, s
 
 func (s *Server) renderIndexHTML(data []byte) []byte {
 	body := string(data)
-	title := html.EscapeString(s.cfg.PageMeta.Title)
-	description := html.EscapeString(s.cfg.PageMeta.Description)
+	title := html.EscapeString(stripBrandColorTags(s.cfg.Branding.Title))
+	description := html.EscapeString(s.cfg.Branding.Description)
 
 	replacements := map[string]string{
-		"%PROBE_SHIELD_PAGE_TITLE%":                            title,
-		"%PROBE_SHIELD_PAGE_DESCRIPTION%":                      description,
-		`<title>shield-probe</title>`:                          `<title>` + title + `</title>`,
+		`<title>ProbeShield</title>`:                          `<title>` + title + `</title>`,
 		`<meta name="description" content="Authentication" />`: `<meta name="description" content="` + description + `" />`,
 	}
 	for from, to := range replacements {
 		body = strings.ReplaceAll(body, from, to)
 	}
 	return []byte(body)
+}
+
+var brandColorTagPattern = regexp.MustCompile(`\{[0-9a-fA-F]{3,8}\}`)
+
+func stripBrandColorTags(value string) string {
+	cleaned := strings.TrimSpace(brandColorTagPattern.ReplaceAllString(value, ""))
+	if cleaned == "" {
+		return "ProbeShield"
+	}
+	return cleaned
 }
 
 func nullableString(value string) any {
@@ -339,4 +372,23 @@ func isHTTPS(r *http.Request) bool {
 		return true
 	}
 	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			if ip := strings.TrimSpace(parts[0]); ip != "" {
+				return ip
+			}
+		}
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
