@@ -20,7 +20,7 @@ x-env: &env
 services:
   probe-shield:
     <<: [*common, *logging, *env]
-    image: ghcr.io/adam-sizzler/probe-shield:latest 
+    image: ghcr.io/adam-sizzler/probe-shield:latest
     container_name: probe-shield
     hostname: probe-shield
     # ports:
