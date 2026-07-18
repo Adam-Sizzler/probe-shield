@@ -53,10 +53,10 @@ jobs:
           pull: true
           no-cache: true
           tags: |
-            ghcr.io/${{ steps.owner.outputs.lc }}/probe-shield:latest
-            ghcr.io/${{ steps.owner.outputs.lc }}/probe-shield:${{ github.sha }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/probeshield:latest
+            ghcr.io/${{ steps.owner.outputs.lc }}/probeshield:${{ github.sha }}
           labels: |
-            org.opencontainers.image.title=probe-shield
+            org.opencontainers.image.title=probeshield
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
