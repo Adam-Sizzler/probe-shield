@@ -281,6 +281,19 @@ func (s *Server) renderIndexHTML(data []byte) []byte {
 		faviconTag = `<link rel="icon" href="` + html.EscapeString(logoURL) + `" />`
 	}
 
+	brandingData := map[string]any{
+		"title":       s.cfg.Branding.Title,
+		"description": s.cfg.Branding.Description,
+		"logoUrl":     nullableString(s.cfg.Branding.LogoURL),
+	}
+	brandingJSON, err := json.Marshal(brandingData)
+	var brandingScript string
+	if err == nil {
+		brandingScript = `<script id="branding-placeholder">window.__BRANDING__ = ` + string(brandingJSON) + `;</script>`
+	} else {
+		brandingScript = `<script id="branding-placeholder">window.__BRANDING__ = {title:"",description:"Authentication",logoUrl:null};</script>`
+	}
+
 	replacements := map[string]string{
 		`<title>ProbeShield</title>`:                            `<title>` + title + `</title>`,
 		`<meta name="description" content="Authentication" />`:   `<meta name="description" content="` + description + `" />`,
@@ -291,6 +304,7 @@ func (s *Server) renderIndexHTML(data []byte) []byte {
 		`<meta property="og:image" content="/favicons/og-image.jpg" />`:  `<meta property="og:image" content="` + html.EscapeString(s.cfg.Branding.ImageURL) + `" />`,
 		`<meta name="twitter:image" content="/favicons/og-image.jpg" />`: `<meta name="twitter:image" content="` + html.EscapeString(s.cfg.Branding.ImageURL) + `" />`,
 		defaultFaviconTag: faviconTag,
+		`<script id="branding-placeholder">window.__BRANDING__ = { title: "ProbeShield", description: "Authentication", logoUrl: null };</script>`: brandingScript,
 	}
 	for from, to := range replacements {
 		body = strings.ReplaceAll(body, from, to)

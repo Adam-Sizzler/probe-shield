@@ -220,7 +220,7 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_PROXY")); v != "" {
 		cfg.Telegram.BotProxy = v
 	}
-	if v := strings.TrimSpace(os.Getenv("TELEGRAM_NOTIFY_SERVICE")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("TELEGRAM_NOTIFY_AUTH")); v != "" {
 		cfg.Telegram.NotifyTarget = v
 	}
 }

@@ -49,12 +49,22 @@ const BrandTitle = ({ titleParts }: { titleParts: Array<{ color: string; text: s
 
 const stripBrandColorTags = (value: string) => value.replace(/\{[0-9a-fA-F]{3,8}\}/g, '').trim()
 
-const applyBrandingMeta = (branding?: GetStatusCommand.Response['response']['branding']) => {
+declare global {
+    interface Window {
+        __BRANDING__?: {
+            title?: string
+            description?: string
+            logoUrl?: string | null
+        }
+    }
+}
+
+const applyBrandingMeta = (branding?: { title?: string; description?: string }) => {
     if (!branding) {
         return
     }
 
-    const title = stripBrandColorTags(branding.title) || 'ProbeShield'
+    const title = stripBrandColorTags(branding.title || '') || 'ProbeShield'
     document.title = title
 
     const description = branding.description || 'Authentication'
@@ -69,15 +79,17 @@ const applyBrandingMeta = (branding?: GetStatusCommand.Response['response']['bra
 }
 
 export const LoginPage = () => {
-    const { data: authStatus } = useGetAuthStatus()
+    const { data: authStatus, isError } = useGetAuthStatus()
 
     useEffect(() => {
-        applyBrandingMeta(authStatus?.branding)
+        const branding = authStatus?.branding ?? window.__BRANDING__
+        applyBrandingMeta(branding)
     }, [authStatus?.branding])
 
     const titleParts = useMemo(() => {
-        if (authStatus?.branding?.title) {
-            return parseColoredTextUtil(authStatus.branding.title)
+        const title = authStatus?.branding?.title ?? window.__BRANDING__?.title
+        if (title) {
+            return parseColoredTextUtil(title)
         }
 
         return [
@@ -86,17 +98,18 @@ export const LoginPage = () => {
         ]
     }, [authStatus?.branding?.title])
 
+    const logoUrl = authStatus?.branding?.logoUrl ?? window.__BRANDING__?.logoUrl
     const isPasswordEnabled = authStatus?.authentication?.password?.enabled ?? false
 
     return (
         <Page title="Authentication">
             <Stack align="center" gap="xs">
                 <Group align="center" gap={4} justify="center">
-                    <BrandLogo logoUrl={authStatus?.branding.logoUrl} />
+                    <BrandLogo logoUrl={logoUrl} />
                     <BrandTitle titleParts={titleParts} />
                 </Group>
 
-                {!authStatus && (
+                {isError && (
                     <Badge color="cyan" mt={10} size="lg" variant="filled">
                         Server is not responding. Check logs.
                     </Badge>
