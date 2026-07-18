@@ -43,6 +43,7 @@ type TelegramConfig struct {
 	BotToken     string `json:"botToken"`
 	BotProxy     string `json:"botProxy"`
 	NotifyTarget string `json:"notifyTarget"`
+	BrandName string `json:"brandName"`
 }
 
 type ServerConfig struct {
@@ -252,6 +253,7 @@ func normalize(cfg *Config) error {
 	cfg.Branding.Description = strings.TrimSpace(cfg.Branding.Description)
 	cfg.Branding.LogoURL = strings.TrimSpace(cfg.Branding.LogoURL)
 	cfg.Branding.ImageURL = strings.TrimSpace(cfg.Branding.ImageURL)
+	cfg.Telegram.BrandName = strings.TrimSpace(cfg.Telegram.BrandName)
 	if cfg.Branding.ImageURL == "" {
 		cfg.Branding.ImageURL = "/favicons/og-image.jpg"
 	}

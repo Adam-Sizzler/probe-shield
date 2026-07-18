@@ -40,7 +40,7 @@ func Run() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("probe-shield listening", "address", httpServer.Addr, "static_dir", cfg.Server.StaticDir)
+		logger.Info("ProbeShield listening", "address", httpServer.Addr, "static_dir", cfg.Server.StaticDir)
 		errCh <- httpServer.ListenAndServe()
 	}()
 

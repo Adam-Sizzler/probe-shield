@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +25,30 @@ type TelegramNotifier struct {
 	token        string
 	notifyTarget string
 	proxyURL     string
+	brandName    string
 	client       *http.Client
+}
+
+var brandColorTagPattern = regexp.MustCompile(`\{[0-9a-fA-F]{3,8}\}`)
+
+// stripBrandColorTags mirrors server.renderIndexHTML's stripping logic so the
+// Telegram brand label matches what's shown on the auth page.
+func stripBrandColorTags(value string) string {
+	cleaned := strings.TrimSpace(brandColorTagPattern.ReplaceAllString(value, ""))
+	if cleaned == "" {
+		return "ProbeShield"
+	}
+	return cleaned
+}
+
+// resolveBrandName picks the Telegram label in priority order:
+// dedicated TELEGRAM_BRAND_NAME, then the shared auth-page branding title,
+// then the "ProbeShield" default.
+func resolveBrandName(cfg config.Config) string {
+	if name := strings.TrimSpace(cfg.Telegram.BrandName); name != "" {
+		return name
+	}
+	return stripBrandColorTags(cfg.Branding.Title)
 }
 
 func NewTelegramNotifier(cfg config.Config) *TelegramNotifier {
@@ -33,6 +57,7 @@ func NewTelegramNotifier(cfg config.Config) *TelegramNotifier {
 		token:        cfg.Telegram.BotToken,
 		notifyTarget: cfg.Telegram.NotifyTarget,
 		proxyURL:     cfg.Telegram.BotProxy,
+		brandName:    resolveBrandName(cfg),
 		client:       newTelegramHTTPClient(cfg.Telegram.BotProxy),
 	}
 }
@@ -88,7 +113,8 @@ func (t *TelegramNotifier) SendLoginNotification(ctx context.Context, success bo
 
 	if success {
 		text = fmt.Sprintf(
-			"<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <tg-emoji emoji-id='5461117441612462242'>✅</tg-emoji> <b>#login_attempt_success</b> (Probe-Shield)\n%s\n<tg-emoji emoji-id='5256143829672672750'>👥</tg-emoji> <code>%s</code>\n<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> <b>IP:</b> <code>%s</code>\n<tg-emoji emoji-id='5460756166143405924'>💻</tg-emoji> <b>User agent:</b> <code>%s</code>",
+			"<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <tg-emoji emoji-id='5461117441612462242'>✅</tg-emoji> <b>#login_attempt_success</b> (%s)\n%s\n<tg-emoji emoji-id='5256143829672672750'>👥</tg-emoji> <code>%s</code>\n<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> <b>IP:</b> <code>%s</code>\n<tg-emoji emoji-id='5460756166143405924'>💻</tg-emoji> <b>User agent:</b> <code>%s</code>",
+			html.EscapeString(t.brandName),
 			separator,
 			html.EscapeString(username),
 			html.EscapeString(clientIP),
@@ -96,7 +122,8 @@ func (t *TelegramNotifier) SendLoginNotification(ctx context.Context, success bo
 		)
 	} else {
 		text = fmt.Sprintf(
-			"<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <tg-emoji emoji-id='5472267631979405211'>❌</tg-emoji> <b>#login_attempt_failed</b> (Probe-Shield)\n%s\n<tg-emoji emoji-id='5256143829672672750'>👥</tg-emoji> <code>%s</code>\n<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <b>Password:</b> <code>%s</code>\n<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> <b>IP:</b> <code>%s</code>\n<tg-emoji emoji-id='5460756166143405924'>💻</tg-emoji> <b>User agent:</b> <code>%s</code>\n<tg-emoji emoji-id='5443038326535759644'>💬</tg-emoji> <b>Description:</b> <code>%s</code>",
+			"<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <tg-emoji emoji-id='5472267631979405211'>❌</tg-emoji> <b>#login_attempt_failed</b> (%s)\n%s\n<tg-emoji emoji-id='5256143829672672750'>👥</tg-emoji> <code>%s</code>\n<tg-emoji emoji-id='5330115548900501467'>🔑</tg-emoji> <b>Password:</b> <code>%s</code>\n<tg-emoji emoji-id='5447410659077661506'>🌐</tg-emoji> <b>IP:</b> <code>%s</code>\n<tg-emoji emoji-id='5460756166143405924'>💻</tg-emoji> <b>User agent:</b> <code>%s</code>\n<tg-emoji emoji-id='5443038326535759644'>💬</tg-emoji> <b>Description:</b> <code>%s</code>",
+			html.EscapeString(t.brandName),
 			separator,
 			html.EscapeString(username),
 			html.EscapeString(password),
