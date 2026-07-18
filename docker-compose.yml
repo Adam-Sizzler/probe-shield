@@ -18,11 +18,11 @@ x-env: &env
   env_file: .env
 
 services:
-  probe-shield:
+  probeshield:
     <<: [*common, *logging, *env]
-    image: ghcr.io/adam-sizzler/probe-shield:latest
-    container_name: probe-shield
-    hostname: probe-shield
+    image: ghcr.io/adam-sizzler/probeshield:latest
+    container_name: probeshield
+    hostname: probeshield
     # ports:
     #   - "${PROBE_SHIELD_HTTP_PORT:-4000}:${PROBE_SHIELD_HTTP_PORT:-4000}"
 

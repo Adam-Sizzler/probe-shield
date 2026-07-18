@@ -21,7 +21,7 @@ RUN go mod download
 
 # Copy the source code and build the statically linked binary
 COPY backend/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/probe-shield .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/probeshield .
 
 # Stage 3: Create the minimal production image
 FROM alpine:3.21
@@ -31,7 +31,7 @@ WORKDIR /app
 RUN addgroup -S probe && adduser -S -G probe probe
 
 # Copy the compiled binary from the builder stage
-COPY --from=backend-builder /out/probe-shield /app/probe-shield
+COPY --from=backend-builder /out/probeshield /app/probeshield
 
 # Copy static frontend assets and configuration files from builders/host
 COPY --from=frontend-builder /src/frontend/dist /app/frontend/dist
@@ -42,4 +42,4 @@ EXPOSE 4000
 # Drop privileges to the non-root user
 USER probe
 
-ENTRYPOINT ["/app/probe-shield"]
+ENTRYPOINT ["/app/probeshield"]
