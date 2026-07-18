@@ -14,7 +14,8 @@
   "branding": {
     "title": "",
     "description": "Authentication",
-    "logoUrl": ""
+    "logoUrl": "",
+    "imageUrl": ""
   },
   "responseHeaders": {
     "enabled": true,

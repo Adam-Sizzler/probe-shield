@@ -282,8 +282,14 @@ func (s *Server) renderIndexHTML(data []byte) []byte {
 	}
 
 	replacements := map[string]string{
-		`<title>ProbeShield</title>`:                          `<title>` + title + `</title>`,
-		`<meta name="description" content="Authentication" />`: `<meta name="description" content="` + description + `" />`,
+		`<title>ProbeShield</title>`:                            `<title>` + title + `</title>`,
+		`<meta name="description" content="Authentication" />`:   `<meta name="description" content="` + description + `" />`,
+		`<meta property="og:title" content="ProbeShield" />`:    `<meta property="og:title" content="` + title + `" />`,
+		`<meta name="twitter:title" content="ProbeShield" />`:   `<meta name="twitter:title" content="` + title + `" />`,
+		`<meta property="og:description" content="Authentication" />`: `<meta property="og:description" content="` + description + `" />`,
+		`<meta name="twitter:description" content="Authentication" />`: `<meta name="twitter:description" content="` + description + `" />`,
+		`<meta property="og:image" content="/favicons/og-image.jpg" />`:  `<meta property="og:image" content="` + html.EscapeString(s.cfg.Branding.ImageURL) + `" />`,
+		`<meta name="twitter:image" content="/favicons/og-image.jpg" />`: `<meta name="twitter:image" content="` + html.EscapeString(s.cfg.Branding.ImageURL) + `" />`,
 		defaultFaviconTag: faviconTag,
 	}
 	for from, to := range replacements {
