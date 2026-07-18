@@ -271,9 +271,20 @@ func (s *Server) renderIndexHTML(data []byte) []byte {
 	title := html.EscapeString(stripBrandColorTags(s.cfg.Branding.Title))
 	description := html.EscapeString(s.cfg.Branding.Description)
 
+	// Default favicon shipped with the frontend build (see frontend/public/favicons/logo.svg).
+	// NB: the href below must match the built frontend/dist/index.html markup exactly
+	// (frontend is always deployed at root, so Vite's %BASE_URL% resolves to "/"),
+	// same caveat as the title/description replacements above.
+	defaultFaviconTag := `<link rel="icon" href="/favicons/logo.svg" type="image/svg+xml" />`
+	faviconTag := defaultFaviconTag
+	if logoURL := strings.TrimSpace(s.cfg.Branding.LogoURL); logoURL != "" {
+		faviconTag = `<link rel="icon" href="` + html.EscapeString(logoURL) + `" />`
+	}
+
 	replacements := map[string]string{
 		`<title>ProbeShield</title>`:                          `<title>` + title + `</title>`,
 		`<meta name="description" content="Authentication" />`: `<meta name="description" content="` + description + `" />`,
+		defaultFaviconTag: faviconTag,
 	}
 	for from, to := range replacements {
 		body = strings.ReplaceAll(body, from, to)

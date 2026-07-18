@@ -21,6 +21,7 @@ const (
 	envBrandTitle       = "PROBE_SHIELD_BRAND_TITLE"
 	envBrandDescription = "PROBE_SHIELD_BRAND_DESCRIPTION"
 	envBrandLogoURL     = "PROBE_SHIELD_BRAND_LOGO_URL"
+	envBrandImageURL    = "PROBE_SHIELD_BRAND_IMAGE_URL"
 	envHeadersEnabled   = "PROBE_SHIELD_RESPONSE_HEADERS_ENABLED"
 	envHeadersJSON      = "PROBE_SHIELD_RESPONSE_HEADERS_JSON"
 
@@ -86,6 +87,9 @@ type BrandingConfig struct {
 	// LogoURL may be an absolute URL or a root-relative/static URL, for example:
 	// https://example.com/logo.svg or /logo.svg
 	LogoURL string `json:"logoUrl"`
+
+	// ImageURL is the preview image used for social media previews (OG, Twitter)
+	ImageURL string `json:"imageUrl"`
 }
 
 func Default() Config {
@@ -110,6 +114,7 @@ func Default() Config {
 			Title:       "",
 			Description: "Authentication",
 			LogoURL:     "",
+			ImageURL:    "",
 		},
 		ResponseHeaders: ResponseHeadersConfig{
 			Enabled: true,
@@ -189,6 +194,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv(envBrandLogoURL)); v != "" {
 		cfg.Branding.LogoURL = v
 	}
+	if v := strings.TrimSpace(os.Getenv(envBrandImageURL)); v != "" {
+		cfg.Branding.ImageURL = v
+	}
 	if v := strings.TrimSpace(os.Getenv(envHeadersEnabled)); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			cfg.ResponseHeaders.Enabled = b
@@ -242,8 +250,11 @@ func normalize(cfg *Config) error {
 
 	cfg.Branding.Title = strings.TrimSpace(cfg.Branding.Title)
 	cfg.Branding.Description = strings.TrimSpace(cfg.Branding.Description)
-	cfg.Branding.Description = strings.TrimSpace(cfg.Branding.Description)
 	cfg.Branding.LogoURL = strings.TrimSpace(cfg.Branding.LogoURL)
+	cfg.Branding.ImageURL = strings.TrimSpace(cfg.Branding.ImageURL)
+	if cfg.Branding.ImageURL == "" {
+		cfg.Branding.ImageURL = "/favicons/og-image.jpg"
+	}
 	if cfg.ResponseHeaders.Headers != nil {
 		normalized := make(map[string]string, len(cfg.ResponseHeaders.Headers))
 		for name, value := range cfg.ResponseHeaders.Headers {
